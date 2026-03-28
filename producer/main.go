@@ -2,11 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+type EmailMessage struct {
+	Name  string
+	Email string
+}
 
 func main() {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
@@ -20,13 +26,26 @@ func main() {
 	queueArgs := amqp.Table{
 		amqp.QueueTypeArg: amqp.QueueTypeQuorum,
 	}
-	q, err := ch.QueueDeclare("hello", true, false, false, false, queueArgs)
+	q, err := ch.QueueDeclare(
+		"email_queue",
+		true,
+		false,
+		false,
+		false,
+		queueArgs,
+	)
 	failOnError(err, "Failed To Declare A Queue")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	body := "Khairul Aswad"
+	msg := EmailMessage{
+		Name:  "Khairul",
+		Email: "khairul@gmail.com",
+	}
+
+	body, err := json.Marshal(msg)
+	failOnError(err, "Err Marshalling Message")
 
 	err = ch.PublishWithContext(ctx,
 		"",
@@ -34,8 +53,9 @@ func main() {
 		false,
 		false,
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(body),
+			ContentType:  "application/json",
+			Body:         body,
+			DeliveryMode: amqp.Persistent,
 		})
 	failOnError(err, "Failed To Publish A Message")
 	log.Printf(" [x] Send %s\n ", body)
